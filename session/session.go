@@ -155,9 +155,15 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	s.serverMu.RLock()
 	origin := s.serverAddr
 	s.serverMu.RUnlock()
+	inFallback := s.inFallback.Load()
 	processorCtx := NewContext()
 	s.Processor().ProcessPreTransfer(processorCtx, &origin, &addr)
 	if processorCtx.Cancelled() {
+		if inFallback {
+			err := errors.New("processor failed")
+			s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+			s.inFallback.Store(false)
+		}
 		return errors.New("processor failed")
 	}
 
@@ -165,17 +171,29 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
 		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		if inFallback {
+			s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+			s.inFallback.Store(false)
+		}
 		return fmt.Errorf("dialer failed: %w", err)
 	}
 
 	if err := conn.DoConnect(); err != nil {
 		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		if inFallback {
+			s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+			s.inFallback.Store(false)
+		}
 		return fmt.Errorf("connection sequence failed failed: %w", err)
 	}
 
 	conn.OnConnect(func(err error) {
 		if err != nil {
 			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			if inFallback {
+				s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+				s.inFallback.Store(false)
+			}
 			return
 		}
 
@@ -184,7 +202,14 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		s.sendGameData(conn.GameData())
 		if err := conn.DoSpawn(); err != nil {
 			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			if inFallback {
+				s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+				s.inFallback.Store(false)
+			}
 			return
+		}
+		if inFallback {
+			s.Processor().ProcessPostFallback(NewContext(), &origin, &addr)
 		}
 		s.inFallback.Store(false)
 		s.animation.Clear(s.client, gameData)
@@ -320,9 +345,25 @@ func (s *Session) fallback() error {
 		return errors.New("already in fallback")
 	}
 
+	s.serverMu.RLock()
+	origin := s.serverAddr
+	s.serverMu.RUnlock()
+
 	addr, err := s.discovery.DiscoverFallback(s.client)
 	if err != nil {
+		target := ""
+		s.Processor().ProcessFallbackFailure(NewContext(), &origin, &target, err)
+		s.inFallback.Store(false)
 		return fmt.Errorf("discovery failed: %w", err)
+	}
+
+	processorCtx := NewContext()
+	s.Processor().ProcessPreFallback(processorCtx, &origin, &addr)
+	if processorCtx.Cancelled() {
+		err := errors.New("processor failed")
+		s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+		s.inFallback.Store(false)
+		return err
 	}
 
 	s.logger.Debug("transferring session to a fallback server", "addr", addr)
