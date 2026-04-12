@@ -155,27 +155,45 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	s.serverMu.RLock()
 	origin := s.serverAddr
 	s.serverMu.RUnlock()
+	inFallback := s.inFallback.Load()
 	processorCtx := NewContext()
 	s.Processor().ProcessPreTransfer(processorCtx, &origin, &addr)
 	if processorCtx.Cancelled() {
+		if inFallback {
+			err := errors.New("processor failed")
+			s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+			s.inFallback.Store(false)
+		}
 		return errors.New("processor failed")
 	}
 
 	s.sendMetadata(true)
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
+		if inFallback {
+			s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+			s.inFallback.Store(false)
+		}
 		return fmt.Errorf("dialer failed: %w", err)
 	}
 
 	if err := conn.DoConnect(); err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
+		if inFallback {
+			s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+			s.inFallback.Store(false)
+		}
 		return fmt.Errorf("connection sequence failed failed: %w", err)
 	}
 
 	conn.OnConnect(func(err error) {
 		if err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
+			if inFallback {
+				s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+				s.inFallback.Store(false)
+			}
 			return
 		}
 
@@ -183,8 +201,15 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		s.animation.Play(s.client, gameData)
 		s.sendGameData(conn.GameData())
 		if err := conn.DoSpawn(); err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr, err)
+			if inFallback {
+				s.Processor().ProcessFallbackFailure(NewContext(), &origin, &addr, err)
+				s.inFallback.Store(false)
+			}
 			return
+		}
+		if inFallback {
+			s.Processor().ProcessPostFallback(NewContext(), &origin, &addr)
 		}
 		s.inFallback.Store(false)
 		s.animation.Clear(s.client, gameData)
@@ -379,4 +404,58 @@ func (s *Session) sendGameData(gameData minecraft.GameData) {
 	_ = s.client.WritePacket(&packet.SetDifficulty{Difficulty: uint32(gameData.Difficulty)})
 	_ = s.client.WritePacket(&packet.SetPlayerGameType{GameType: gameData.PlayerGameMode})
 	_ = s.client.WritePacket(&packet.GameRulesChanged{GameRules: gameData.GameRules})
+}
+
+func (s *Session) SendMessage(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeRaw,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendTip(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeTip,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendAnnouncement(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeAnnouncement,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendPopup(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypePopup,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendJukeboxPopup(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeJukeboxPopup,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendToast(title, message string) {
+	_ = s.client.WritePacket(&packet.ToastRequest{
+		Title:   title,
+		Message: message,
+	})
+}
+
+func (s *Session) SendTitle(text string) {
+	_ = s.client.WritePacket(&packet.SetTitle{ActionType: packet.TitleActionSetTitle, Text: text})
+}
+
+func (s *Session) SendSubtitle(text string) {
+	_ = s.client.WritePacket(&packet.SetTitle{ActionType: packet.TitleActionSetSubtitle, Text: text})
+}
+
+func (s *Session) SendActionBarMessage(text string) {
+	_ = s.client.WritePacket(&packet.SetTitle{ActionType: packet.TitleActionSetActionBar, Text: text})
 }
