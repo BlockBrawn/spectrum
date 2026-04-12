@@ -117,7 +117,7 @@ func (s *Session) LoginContext(ctx context.Context) (err error) {
 	}
 
 	gameData := conn.GameData()
-	s.Processor().ProcessStartGame(NewContext(), &gameData)
+	s.Processor().ProcessStartGame(NewContext(s), &gameData)
 	if err := s.client.StartGame(gameData); err != nil {
 		s.logger.Debug("startgame sequence failed", "err", err)
 		return err
@@ -155,7 +155,7 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	s.serverMu.RLock()
 	origin := s.serverAddr
 	s.serverMu.RUnlock()
-	processorCtx := NewContext()
+	processorCtx := NewContext(s)
 	s.Processor().ProcessPreTransfer(processorCtx, &origin, &addr)
 	if processorCtx.Cancelled() {
 		return errors.New("processor failed")
@@ -164,18 +164,18 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 	s.sendMetadata(true)
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(s), &origin, &addr)
 		return fmt.Errorf("dialer failed: %w", err)
 	}
 
 	if err := conn.DoConnect(); err != nil {
-		s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+		s.Processor().ProcessTransferFailure(NewContext(s), &origin, &addr)
 		return fmt.Errorf("connection sequence failed failed: %w", err)
 	}
 
 	conn.OnConnect(func(err error) {
 		if err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(s), &origin, &addr)
 			return
 		}
 
@@ -183,12 +183,12 @@ func (s *Session) TransferContext(ctx context.Context, addr string) (err error) 
 		s.animation.Play(s.client, gameData)
 		s.sendGameData(conn.GameData())
 		if err := conn.DoSpawn(); err != nil {
-			s.Processor().ProcessTransferFailure(NewContext(), &origin, &addr)
+			s.Processor().ProcessTransferFailure(NewContext(s), &origin, &addr)
 			return
 		}
 		s.inFallback.Store(false)
 		s.animation.Clear(s.client, gameData)
-		s.Processor().ProcessPostTransfer(NewContext(), &origin, &addr)
+		s.Processor().ProcessPostTransfer(NewContext(s), &origin, &addr)
 		s.logger.Debug("transferred session", "origin", origin, "target", addr)
 	})
 	return nil
@@ -211,7 +211,7 @@ func (s *Session) Cache() []byte {
 
 // SetCache updates the session cache.
 func (s *Session) SetCache(cache []byte) {
-	ctx := NewContext()
+	ctx := NewContext(s)
 	s.Processor().ProcessCache(ctx, &cache)
 	if !ctx.Cancelled() {
 		s.cache.Store(cache)
@@ -271,7 +271,7 @@ func (s *Session) Close() (err error) {
 func (s *Session) CloseWithError(err error) {
 	s.once.Do(func() {
 		message := err.Error()
-		s.Processor().ProcessDisconnection(NewContext(), &message)
+		s.Processor().ProcessDisconnection(NewContext(s), &message)
 		_ = s.client.WritePacket(&packet.Disconnect{Message: message})
 		_ = s.client.Close()
 		if conn := s.Server(); conn != nil {

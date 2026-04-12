@@ -5,14 +5,26 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
-// Context represents the context of an action. It holds the state of whether the action has been canceled.
+// Context represents the context of an action. It holds the state of whether the action has been canceled
+// and the session associated with that action.
 type Context struct {
 	canceled bool
+	val      *Session
 }
 
-// NewContext returns a new context.
-func NewContext() *Context {
-	return &Context{}
+// C returns a new context containing the provided session.
+func C(v *Session) *Context {
+	return &Context{val: v}
+}
+
+// NewContext returns a new context containing the provided session.
+func NewContext(v *Session) *Context {
+	return C(v)
+}
+
+// Val returns the session of the context.
+func (c *Context) Val() *Session {
+	return c.val
 }
 
 // Cancel marks the context as canceled. This function is used to stop further processing of an action.
