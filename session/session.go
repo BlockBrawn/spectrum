@@ -405,3 +405,57 @@ func (s *Session) sendGameData(gameData minecraft.GameData) {
 	_ = s.client.WritePacket(&packet.SetPlayerGameType{GameType: gameData.PlayerGameMode})
 	_ = s.client.WritePacket(&packet.GameRulesChanged{GameRules: gameData.GameRules})
 }
+
+func (s *Session) SendMessage(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeRaw,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendTip(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeTip,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendAnnouncement(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeAnnouncement,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendPopup(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypePopup,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendJukeboxPopup(message string) {
+	_ = s.client.WritePacket(&packet.Text{
+		TextType: packet.TextTypeJukeboxPopup,
+		Message:  message,
+	})
+}
+
+func (s *Session) SendToast(title, message string) {
+	_ = s.client.WritePacket(&packet.ToastRequest{
+		Title:   title,
+		Message: message,
+	})
+}
+
+func (s *Session) SendTitle(text string) {
+	_ = s.client.WritePacket(&packet.SetTitle{ActionType: packet.TitleActionSetTitle, Text: text})
+}
+
+func (s *Session) SendSubtitle(text string) {
+	_ = s.client.WritePacket(&packet.SetTitle{ActionType: packet.TitleActionSetSubtitle, Text: text})
+}
+
+func (s *Session) SendActionBarMessage(text string) {
+	_ = s.client.WritePacket(&packet.SetTitle{ActionType: packet.TitleActionSetActionBar, Text: text})
+}
