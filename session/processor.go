@@ -5,14 +5,26 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
-// Context represents the context of an action. It holds the state of whether the action has been canceled.
+// Context represents the context of an action. It holds the state of whether the action has been canceled
+// and the session associated with that action.
 type Context struct {
 	canceled bool
+	val      *Session
 }
 
-// NewContext returns a new context.
-func NewContext() *Context {
-	return &Context{}
+// C returns a new context containing the provided session.
+func C(v *Session) *Context {
+	return &Context{val: v}
+}
+
+// NewContext returns a new context containing the provided session.
+func NewContext(v *Session) *Context {
+	return C(v)
+}
+
+// Val returns the session of the context.
+func (c *Context) Val() *Session {
+	return c.val
 }
 
 // Cancel marks the context as canceled. This function is used to stop further processing of an action.
@@ -63,17 +75,17 @@ type NopProcessor struct{}
 // Ensure that NopProcessor satisfies the Processor interface.
 var _ Processor = NopProcessor{}
 
-func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)      {}
-func (NopProcessor) ProcessServer(_ *Context, _ *packet.Packet)              {}
-func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)              {}
-func (NopProcessor) ProcessClient(_ *Context, _ *packet.Packet)              {}
-func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)              {}
-func (NopProcessor) ProcessFlush(_ *Context)                                 {}
-func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)     {}
+func (NopProcessor) ProcessStartGame(_ *Context, _ *minecraft.GameData)               {}
+func (NopProcessor) ProcessServer(_ *Context, _ *packet.Packet)                       {}
+func (NopProcessor) ProcessServerEncoded(_ *Context, _ *[]byte)                       {}
+func (NopProcessor) ProcessClient(_ *Context, _ *packet.Packet)                       {}
+func (NopProcessor) ProcessClientEncoded(_ *Context, _ *[]byte)                       {}
+func (NopProcessor) ProcessFlush(_ *Context)                                          {}
+func (NopProcessor) ProcessPreTransfer(_ *Context, _ *string, _ *string)              {}
 func (NopProcessor) ProcessTransferFailure(_ *Context, _ *string, _ *string, _ error) {}
-func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)    {}
-func (NopProcessor) ProcessCache(_ *Context, _ *[]byte)                      {}
-func (NopProcessor) ProcessDisconnection(_ *Context, _ *string)              {}
+func (NopProcessor) ProcessPostTransfer(_ *Context, _ *string, _ *string)             {}
+func (NopProcessor) ProcessCache(_ *Context, _ *[]byte)                               {}
+func (NopProcessor) ProcessDisconnection(_ *Context, _ *string)                       {}
 func (NopProcessor) ProcessPreFallback(_ *Context, _ *string, _ *string)              {}
 func (NopProcessor) ProcessFallbackFailure(_ *Context, _ *string, _ *string, _ error) {}
 func (NopProcessor) ProcessPostFallback(_ *Context, _ *string, _ *string)             {}

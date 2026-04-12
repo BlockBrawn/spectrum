@@ -40,7 +40,7 @@ loop:
 
 		switch pk := pk.(type) {
 		case *spectrumpacket.Flush:
-			ctx := NewContext()
+			ctx := NewContext(s)
 			s.Processor().ProcessFlush(ctx)
 			if ctx.Cancelled() {
 				continue loop
@@ -66,7 +66,7 @@ loop:
 				break loop
 			}
 		case []byte:
-			ctx := NewContext()
+			ctx := NewContext(s)
 			s.Processor().ProcessServerEncoded(ctx, &pk)
 			if ctx.Cancelled() {
 				continue loop
@@ -137,7 +137,7 @@ loop:
 
 // handleServerPacket processes and forwards the provided packet from the server to the client.
 func handleServerPacket(s *Session, pk packet.Packet) (err error) {
-	ctx := NewContext()
+	ctx := NewContext(s)
 	s.Processor().ProcessServer(ctx, &pk)
 	if ctx.Cancelled() {
 		return
@@ -155,7 +155,7 @@ func handleServerPacket(s *Session, pk packet.Packet) (err error) {
 
 // handleClientPacket processes and forwards the provided packet from the client to the server.
 func handleClientPacket(s *Session, header *packet.Header, pool packet.Pool, shieldID int32, payload []byte) (err error) {
-	ctx := NewContext()
+	ctx := NewContext(s)
 	buf := bytes.NewBuffer(payload)
 	if err := header.Read(buf); err != nil {
 		return errors.New("failed to decode header")
