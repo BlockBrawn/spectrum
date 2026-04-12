@@ -21,7 +21,7 @@ func yawToDirectionVec(yaw float64) mgl32.Vec3 {
 		return mgl32.Vec3{0, 0, 1}
 	} else if y < 0 && math.Abs(x) <= 0.5 {
 		return mgl32.Vec3{1, 0, 0}
-	} else {
-		return mgl32.Vec3{0, 0, -1}
 	}
+
+	return mgl32.Vec3{0, 0, -1}
 }
